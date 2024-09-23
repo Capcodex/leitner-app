@@ -1,0 +1,14 @@
+QWidget {
+    font-family: Arial;
+    font-size: 14px;
+}
+
+QLineEdit {
+    padding: 5px;
+}
+
+QTextEdit {
+    background-color: #f0f0f0;
+    padding: 10px;
+    border: 1px solid #ccc;
+}

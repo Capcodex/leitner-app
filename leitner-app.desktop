@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Name=Leitner App
+Comment=Application de bureau pour apprendre avec le système Leitner
+Exec=python3 /./leitner-app/src/main.py
+Icon=/chemin/vers/icône
+Terminal=false
+Type=Application
+Categories=Education;
