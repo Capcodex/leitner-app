@@ -1,9 +1,12 @@
 import sys
-from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QVBoxLayout, QWidget, QLineEdit, QTextEdit, QComboBox, QMessageBox, QGroupBox, QFrame
+from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QVBoxLayout, QWidget, QLineEdit, QTextEdit, QComboBox, QMessageBox, QFrame, QHBoxLayout, QScrollArea
+from PySide6.QtGui import QIcon
 from PySide6.QtGui import QFont
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from LeitnerService import LeitnerService
 from functools import partial
+from datetime import datetime, timedelta
+
 
 class LeitnerApp(QMainWindow):
     def __init__(self):
@@ -47,46 +50,124 @@ class LeitnerApp(QMainWindow):
         self.setCentralWidget(container)
 
     def init_view_cards(self):
-        """Interface pour afficher toutes les cartes."""
+        """Interface pour afficher toutes les cartes avec une UI améliorée et défilement vertical."""
         self.clear_layout()
 
-        layout = QVBoxLayout()
+        # Création d'un conteneur pour le défilement
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        
+        # Conteneur pour le contenu à faire défiler
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
 
         all_cards = self.leitner_service.get_all_cards()
 
-        for card in all_cards:
-            card_label = QLabel(f"{card['question']} (Boîte {card['box'] + 1})")
-            layout.addWidget(card_label)
+        if not all_cards:
+            empty_label = QLabel("Aucune carte n'a été trouvée.")
+            empty_label.setAlignment(Qt.AlignCenter)
+            scroll_layout.addWidget(empty_label)
+        else:
+            for card in all_cards:
+                # Créer un conteneur pour chaque carte
+                card_frame = QFrame()
+                card_frame.setFrameShape(QFrame.StyledPanel)
+                card_frame.setStyleSheet("background-color: #f9f9f9; border-radius: 8px; padding: 10px; margin-bottom: 10px;")
 
-            btn_delete = QPushButton("Supprimer")
-            btn_delete.clicked.connect(partial(self.delete_card, card['question']))
-            layout.addWidget(btn_delete)
+                card_layout = QVBoxLayout()
 
-            btn_move = QPushButton("Déplacer vers la boîte")
-            combo_box = QComboBox()
-            combo_box.addItems([f"Boîte {i + 1}" for i in range(5)])
-            layout.addWidget(combo_box)
-            btn_move.clicked.connect(partial(self.move_card, card['question'], combo_box))
-            layout.addWidget(btn_move)
+                # Titre de la carte (question)
+                card_label = QLabel(f"📋 {card['question']} (Boîte {card['box'] + 1})")
+                card_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #333;")
+                card_layout.addWidget(card_label)
 
+                # Ligne horizontale pour les boutons d'action
+                action_layout = QHBoxLayout()
+
+                # Bouton Supprimer avec icône
+                btn_delete = QPushButton("Supprimer")
+                btn_delete.setIcon(QIcon("icons/trash.png"))  # Assurez-vous d'avoir une icône appropriée
+                btn_delete.setStyleSheet("color: white; background-color: #e74c3c; border-radius: 4px; padding: 5px;")
+                btn_delete.clicked.connect(partial(self.delete_card, card['question']))
+                action_layout.addWidget(btn_delete)
+
+                # Bouton Déplacer avec menu déroulant pour sélectionner la boîte
+                btn_move = QPushButton("Déplacer")
+                btn_move.setIcon(QIcon("icons/move.png"))  # Assurez-vous d'avoir une icône appropriée
+                btn_move.setStyleSheet("color: white; background-color: #3498db; border-radius: 4px; padding: 5px;")
+                combo_box = QComboBox()
+                combo_box.addItems([f"Boîte {i + 1}" for i in range(5)])
+                action_layout.addWidget(combo_box)
+
+                btn_move.clicked.connect(partial(self.move_card, card['question'], combo_box))
+                action_layout.addWidget(btn_move)
+
+                # Ajouter le layout d'action à la carte
+                card_layout.addLayout(action_layout)
+                card_frame.setLayout(card_layout)
+                
+                # Ajouter le cadre de la carte au layout principal
+                scroll_layout.addWidget(card_frame)
+
+        # Configurer le widget de défilement
+        scroll_area.setWidget(scroll_content)
+
+        # Bouton de retour
         btn_back = QPushButton("Retour")
+        btn_back.setStyleSheet("background-color: #2ecc71; color: white; border-radius: 4px; padding: 10px; margin-top: 10px;")
+        btn_back.clicked.connect(self.init_home)
+        scroll_layout.addWidget(btn_back)
+
+        # Mise en place du layout principal
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(scroll_area)  # Ajoutez la zone de défilement au layout principal
+        container = QWidget()
+        container.setLayout(main_layout)
+        self.setCentralWidget(container)
+
+        # Bouton de retour
+        btn_back = QPushButton("Retour")
+        btn_back.setStyleSheet("background-color: #2ecc71; color: white; border-radius: 4px; padding: 10px;")
         btn_back.clicked.connect(self.init_home)
         layout.addWidget(btn_back)
 
+        # Mise en place du layout principal
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
-
+        
     def delete_card(self, question):
         """Supprime une carte."""
         self.leitner_service.delete_card(question)
         QMessageBox.information(self, "Supprimé", f"La carte '{question}' a été supprimée.")
         self.init_view_cards()
 
+    def get_next_revision_time(box):
+        """Renvoie la durée jusqu'à la prochaine révision en fonction de la boîte."""
+        now = datetime.now()
+        
+        if box == 0:
+            return now + timedelta(minutes=10)  # Boîte 1: 10 minutes
+        elif box == 1:
+            return now + timedelta(days=1)  # Boîte 2: 1 jour
+        elif box == 2:
+            return now + timedelta(weeks=1)  # Boîte 3: 1 semaine
+        elif box == 3:
+            return now + timedelta(weeks=4)  # Boîte 4: 1 mois (approximatif)
+        elif box == 4:
+            return now + timedelta(weeks=26)  # Boîte 5: 6 mois
+        else:
+            return now
     def move_card(self, question, combo_box):
-        """Déplace une carte vers une autre boîte."""
+        """Déplace une carte vers une autre boîte et met à jour la date de révision."""
         target_box = combo_box.currentIndex()
         self.leitner_service.move_card(question, target_box)
+        
+        # Ajouter la date de prochaine révision
+        card = self.leitner_service.get_card_by_question(question)
+        card['next_revision'] = get_next_revision_time(target_box)
+        self.leitner_service.update_card(card)
+
         QMessageBox.information(self, "Déplacé", f"La carte '{question}' a été déplacée vers la boîte {target_box + 1}.")
         self.init_view_cards()
 
@@ -135,28 +216,6 @@ class LeitnerApp(QMainWindow):
             QMessageBox.information(self, "Enregistré", f"La carte '{question}' a été ajoutée.")
             self.init_home()
 
-
-    def init_revision_boxes(self):
-        """Interface pour choisir une boîte de révision."""
-        self.clear_layout()
-
-        layout = QVBoxLayout()
-
-        for i in range(5):
-            btn_box = QPushButton(f"Réviser la boîte {i + 1}")
-            btn_box.clicked.connect(partial(self.start_revision, i))
-            btn_box.setStyleSheet("background-color: #5c85d6; color: white; padding: 10px; font-size: 18px; border-radius: 5px;")
-            layout.addWidget(btn_box)
-
-        btn_back = QPushButton("Retour")
-        btn_back.clicked.connect(self.init_home)
-        btn_back.setStyleSheet("background-color: #d9534f; color: white; padding: 10px; font-size: 16px; border-radius: 5px;")
-        layout.addWidget(btn_back)
-
-        container = QWidget()
-        container.setLayout(layout)
-        self.setCentralWidget(container)
-
     def start_revision(self, selected_box):
         """Commence la révision des fiches dans la boîte sélectionnée."""
         self.clear_layout()
@@ -170,6 +229,30 @@ class LeitnerApp(QMainWindow):
         else:
             self.no_more_cards()
 
+
+    def init_revision_boxes(self):
+        """Interface pour choisir une boîte de révision."""
+        self.clear_layout()
+
+        layout = QVBoxLayout()
+
+        for i in range(5):
+            btn_box = QPushButton(f"Réviser la boîte {i + 1}")
+            # Utiliser un lambda pour capturer la valeur de la boîte et ignorer 'checked'
+            btn_box.clicked.connect(partial(self.start_revision, i))
+            btn_box.setStyleSheet("background-color: #5c85d6; color: white; padding: 10px; font-size: 18px; border-radius: 5px;")
+            layout.addWidget(btn_box)
+
+        btn_back = QPushButton("Retour")
+        btn_back.clicked.connect(self.init_home)
+        btn_back.setStyleSheet("background-color: #d9534f; color: white; padding: 10px; font-size: 16px; border-radius: 5px;")
+        layout.addWidget(btn_back)
+
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
+
+        
     def show_current_question(self):
         """Affiche la fiche en cours."""
         layout = QVBoxLayout()
@@ -273,11 +356,3 @@ class LeitnerApp(QMainWindow):
         if self.centralWidget():
             self.centralWidget().setParent(None)
 
-# main.py
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-
-    window = LeitnerApp()
-    window.show()
-
-    sys.exit(app.exec())
