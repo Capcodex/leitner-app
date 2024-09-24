@@ -13,6 +13,8 @@ class LeitnerApp(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        self.layout = QVBoxLayout()
+
         self.setWindowTitle("Leitner App")
         self.setGeometry(100, 100, 800, 600)
 
@@ -53,7 +55,8 @@ class LeitnerApp(QMainWindow):
     def init_view_cards(self):
         """Interface pour afficher toutes les cartes avec une UI améliorée et défilement vertical."""
         self.clear_layout()
-
+        
+        
         # Création d'un conteneur pour le défilement
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -130,7 +133,7 @@ class LeitnerApp(QMainWindow):
         btn_back = QPushButton("Retour")
         btn_back.setStyleSheet("background-color: #2ecc71; color: white; border-radius: 4px; padding: 10px;")
         btn_back.clicked.connect(self.init_home)
-        layout.addWidget(btn_back)
+        self.layout.addWidget(btn_back)
 
         # Mise en place du layout principal
         container = QWidget()
@@ -225,12 +228,56 @@ class LeitnerApp(QMainWindow):
         self.questions = self.leitner_service.get_cards_by_box(selected_box)
         self.results = []  # Réinitialise les résultats
         self.current_index = 0  # Réinitialise l'index des cartes
+        self.selected_box = selected_box  # Stocker la boîte actuelle pour la révision
 
         if self.questions:
             self.show_current_question()
         else:
             self.no_more_cards()
 
+    def complete_revision(self):
+        """Appelée lorsque la révision de la boîte est terminée."""
+        # Mettre à jour 'last_revision' pour toutes les cartes révisées
+        for card in self.questions:
+            card['last_revision'] = datetime.now().isoformat()
+            self.leitner_service.update_card(card)  # Sauvegarder les changements
+        
+        self.init_revision_boxes()
+
+    def revise_card(self, card):
+        """Met à jour la date de dernière révision après avoir révisé une carte."""
+        card['last_revision'] = datetime.now().isoformat()
+        # Vous pouvez aussi enregistrer cette information dans le service ou la base de données si nécessaire
+        self.leitner_service.update_card(card)
+
+    def format_time_left(time_left):
+        """
+        Formatte le temps restant en jours, heures et minutes.
+        """
+        days = time_left.days
+        hours, remainder = divmod(time_left.seconds, 3600)
+        minutes, _ = divmod(remainder, 60)
+
+        if days > 0:
+            return f"{days} jour(s), {hours} heure(s), {minutes} minute(s)"
+        elif hours > 0:
+            return f"{hours} heure(s), {minutes} minute(s)"
+        else:
+            return f"{minutes} minute(s)"
+
+
+
+    def format_time_left(self, time_left):
+        """Formate le temps restant pour l'affichage, sans secondes."""
+        total_seconds = int(time_left.total_seconds())
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, _ = divmod(remainder, 60)
+
+        # Formatage de la chaîne selon les heures et minutes
+        if hours > 0:
+            return f"{hours}h {minutes}m"
+        else:
+            return f"{minutes}m"
 
     def init_revision_boxes(self):
         """Interface pour choisir une boîte de révision avec un décompte."""
@@ -243,6 +290,8 @@ class LeitnerApp(QMainWindow):
 
             if not cards_in_box:
                 revision_status = "Pas de cartes à réviser"
+                due = False  # Aucune révision due
+                next_revision = None  # Pas de prochaine révision
             else:
                 # Initialiser 'last_revision' pour les cartes qui ne l'ont pas encore
                 for card in cards_in_box:
@@ -257,7 +306,7 @@ class LeitnerApp(QMainWindow):
                     revision_status = "Révision à faire"
                 else:
                     time_left = next_revision - datetime.now()
-                    revision_status = f"Prochaine révision dans {time_left}"
+                    revision_status = f"Prochaine révision dans {self.format_time_left(time_left)}"
 
             btn_box = QPushButton(f"Boîte {i + 1} - {revision_status}")
             btn_box.clicked.connect(partial(self.start_revision, i))
@@ -272,6 +321,7 @@ class LeitnerApp(QMainWindow):
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
+
 
         
     def show_current_question(self):
@@ -299,7 +349,7 @@ class LeitnerApp(QMainWindow):
 
             btn_submit = QPushButton("Soumettre")
             btn_submit.setStyleSheet("background-color: #4CAF50; color: white; padding: 8px; font-size: 14px; border-radius: 5px;")
-            btn_submit.clicked.connect(partial(self.submit_revision, current_card))
+            btn_submit.clicked.connect(lambda: self.submit_revision(current_card))  # Utiliser une lambda pour passer l'argument
             card_layout.addWidget(btn_submit)
 
             card_frame.setLayout(card_layout)
@@ -329,11 +379,12 @@ class LeitnerApp(QMainWindow):
             current_card['box'] = max(current_card['box'] - 1, 0)  # Revient à la boîte précédente
 
         current_card['last_revision'] = datetime.now().isoformat()  # Met à jour la date de révision
-        self.leitner_service.update_card(current_card)
+        self.leitner_service.update_card(current_card)  # Enregistre les modifications
 
-        self.results.append((current_card['question'], correct))
+        self.results.append((current_card['question'], correct))  # Stocke le résultat de la révision
         self.current_index += 1  # Passe à la carte suivante
 
+        # Affiche la question suivante ou les résultats
         if self.current_index < len(self.questions):
             self.show_current_question()
         else:

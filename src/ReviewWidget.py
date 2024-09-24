@@ -47,4 +47,4 @@ class ReviewWidget(QWidget):
         if answer.strip() == correct_answer.strip():
             self.result_label.setText("Bonne réponse")
         else:
-            self.result_label.setText("Mauvaise réponse")
+            self.result_label.setText(f"Mauvaise réponse. La bonne réponse est : {correct_answer}")
