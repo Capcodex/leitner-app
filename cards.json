@@ -1,0 +1,1 @@
+[[{"question": "hello", "command": "hello"}, {"question": "ls", "command": "ls"}, {"question": "pwd", "command": "pwd"}, {"question": "ls -l", "command": "ls -ls"}, {"question": "hello", "command": "helo"}, {"question": "cd", "command": "cd"}], [], [], [], []]
