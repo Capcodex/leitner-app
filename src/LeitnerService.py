@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 class LeitnerService:
     def __init__(self):
@@ -7,13 +8,21 @@ class LeitnerService:
         self.load_cards()  # Charger les cartes lors de l'initialisation
 
     def add_card(self, card):
-        """Ajoute une carte au système."""
+        # Ajouter une date de révision initiale lors de l'ajout de la carte
+        card['last_revision'] = datetime.now().isoformat()  # On enregistre la date actuelle
         self.cards.append(card)
         self.save_cards()  # Sauvegarde après l'ajout
 
     def get_cards_by_box(self, box):
-        """Retourne toutes les cartes d'une boîte donnée."""
-        return [card for card in self.cards if card['box'] == box]
+        """Récupère les cartes par boîte avec initialisation de 'last_revision' si nécessaire."""
+        cards_in_box = [card for card in self.cards if card['box'] == box]
+        
+        # Initialiser 'last_revision' pour les cartes qui ne l'ont pas encore
+        for card in cards_in_box:
+            if 'last_revision' not in card:
+                card['last_revision'] = datetime.now().isoformat()
+
+        return cards_in_box
 
     def update_card(self, updated_card):
         """Met à jour une carte dans la liste."""

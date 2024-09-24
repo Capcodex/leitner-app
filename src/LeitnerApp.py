@@ -8,6 +8,7 @@ from functools import partial
 from datetime import datetime, timedelta
 
 
+
 class LeitnerApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -158,6 +159,7 @@ class LeitnerApp(QMainWindow):
             return now + timedelta(weeks=26)  # Boîte 5: 6 mois
         else:
             return now
+
     def move_card(self, question, combo_box):
         """Déplace une carte vers une autre boîte et met à jour la date de révision."""
         target_box = combo_box.currentIndex()
@@ -231,14 +233,33 @@ class LeitnerApp(QMainWindow):
 
 
     def init_revision_boxes(self):
-        """Interface pour choisir une boîte de révision."""
+        """Interface pour choisir une boîte de révision avec un décompte."""
         self.clear_layout()
 
         layout = QVBoxLayout()
 
-        for i in range(5):
-            btn_box = QPushButton(f"Réviser la boîte {i + 1}")
-            # Utiliser un lambda pour capturer la valeur de la boîte et ignorer 'checked'
+        for i in range(5):  # Pour chaque boîte de 1 à 5
+            cards_in_box = self.leitner_service.get_cards_by_box(i)
+
+            if not cards_in_box:
+                revision_status = "Pas de cartes à réviser"
+            else:
+                # Initialiser 'last_revision' pour les cartes qui ne l'ont pas encore
+                for card in cards_in_box:
+                    if 'last_revision' not in card:
+                        card['last_revision'] = datetime.now().isoformat()  # Initialiser à la date actuelle
+
+                # Trouver la date de révision la plus ancienne
+                last_revision = min([card['last_revision'] for card in cards_in_box])  
+                due, next_revision = self.is_revision_due(last_revision, i)
+
+                if due:
+                    revision_status = "Révision à faire"
+                else:
+                    time_left = next_revision - datetime.now()
+                    revision_status = f"Prochaine révision dans {time_left}"
+
+            btn_box = QPushButton(f"Boîte {i + 1} - {revision_status}")
             btn_box.clicked.connect(partial(self.start_revision, i))
             btn_box.setStyleSheet("background-color: #5c85d6; color: white; padding: 10px; font-size: 18px; border-radius: 5px;")
             layout.addWidget(btn_box)
@@ -294,22 +315,23 @@ class LeitnerApp(QMainWindow):
         self.setCentralWidget(container)
 
     def submit_revision(self, current_card):
-        """Vérifie la réponse pour la fiche courante et gère la logique Leitner."""
+        """Vérifie la réponse et met à jour la carte après révision."""
         user_command = self.command_input.toPlainText().strip()
         correct = user_command == current_card['command'].strip()
 
-        # On s'assure que la carte a une boîte
         if 'box' not in current_card:
-            current_card['box'] = 0  # Initialisation dans la boîte 1 (index 0)
+            current_card['box'] = 0  # Initialisation dans la boîte 1
 
+        # Met à jour la boîte en fonction de la réussite ou de l'échec
         if correct:
             current_card['box'] = min(current_card['box'] + 1, 4)  # Passe à la boîte suivante (max boîte 5)
         else:
-            current_card['box'] = max(current_card['box'] - 1, 0)  # Revient à la boîte précédente (min boîte 1)
+            current_card['box'] = max(current_card['box'] - 1, 0)  # Revient à la boîte précédente
 
-        self.leitner_service.update_card(current_card)  # Met à jour la carte dans le système
+        current_card['last_revision'] = datetime.now().isoformat()  # Met à jour la date de révision
+        self.leitner_service.update_card(current_card)
 
-        self.results.append((current_card['question'], correct))  # Stocke le résultat
+        self.results.append((current_card['question'], correct))
         self.current_index += 1  # Passe à la carte suivante
 
         if self.current_index < len(self.questions):
@@ -317,7 +339,34 @@ class LeitnerApp(QMainWindow):
         else:
             self.show_results()
 
-
+    def is_revision_due(self, last_revision, box):
+        """
+        Vérifie si une révision est due pour une carte donnée, en fonction de l'intervalle de la boîte.
+        
+        last_revision : string (date ISO format)
+        box : int (index de la boîte, entre 0 et 4)
+        
+        Renvoie un tuple (due, next_revision)
+        due : booléen indiquant si la révision est due
+        next_revision : datetime de la prochaine révision
+        """
+        last_revision_date = datetime.fromisoformat(last_revision)
+        # Délais de révision en fonction de la boîte (en minutes, jours, semaines, mois)
+        intervals = [
+            timedelta(minutes=10),   # Boîte 1 : 10 minutes
+            timedelta(days=1),       # Boîte 2 : 1 jour
+            timedelta(weeks=1),      # Boîte 3 : 1 semaine
+            timedelta(weeks=4),      # Boîte 4 : 1 mois (approximé à 4 semaines)
+            timedelta(weeks=24)      # Boîte 5 : 6 mois (approximé à 24 semaines)
+        ]
+        
+        # Calcul de la prochaine date de révision en fonction de la boîte
+        next_revision = last_revision_date + intervals[box]
+        
+        # Si la date actuelle est supérieure ou égale à la prochaine révision, elle est due
+        due = datetime.now() >= next_revision
+        
+        return due, next_revision
     def show_results(self):
         """Affiche les résultats après la révision."""
         layout = QVBoxLayout()
