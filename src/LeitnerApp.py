@@ -1,8 +1,7 @@
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QVBoxLayout, QWidget, QLineEdit, QTextEdit, QComboBox, QMessageBox, QFrame, QHBoxLayout, QScrollArea
-from PySide6.QtGui import QIcon
-from PySide6.QtGui import QFont
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QIcon, QPixmap, QFont
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize
 from LeitnerService import LeitnerService
 from functools import partial
 from datetime import datetime, timedelta
@@ -367,7 +366,8 @@ class LeitnerApp(QMainWindow):
     def submit_revision(self, current_card):
         """Vérifie la réponse et met à jour la carte après révision."""
         user_command = self.command_input.toPlainText().strip()
-        correct = user_command == current_card['command'].strip()
+        correct_answer = current_card['command'].strip()
+        correct = user_command == correct_answer
 
         if 'box' not in current_card:
             current_card['box'] = 0  # Initialisation dans la boîte 1
@@ -381,7 +381,8 @@ class LeitnerApp(QMainWindow):
         current_card['last_revision'] = datetime.now().isoformat()  # Met à jour la date de révision
         self.leitner_service.update_card(current_card)  # Enregistre les modifications
 
-        self.results.append((current_card['question'], correct))  # Stocke le résultat de la révision
+        # Ajoute la question, la correction et la bonne réponse dans les résultats
+        self.results.append((current_card['question'], correct, correct_answer))  
         self.current_index += 1  # Passe à la carte suivante
 
         # Affiche la question suivante ou les résultats
@@ -418,13 +419,20 @@ class LeitnerApp(QMainWindow):
         due = datetime.now() >= next_revision
         
         return due, next_revision
+
     def show_results(self):
         """Affiche les résultats après la révision."""
         layout = QVBoxLayout()
 
-        for question, correct in self.results:
-            result_label = QLabel(f"{question}: {'Correct' if correct else 'Incorrect'}")
-            result_label.setStyleSheet(f"font-size: 16px; color: {'green' if correct else 'red'};")
+        for question, correct, correct_answer in self.results:
+            # Affichage personnalisé pour les réponses correctes et incorrectes
+            if correct:
+                result_label = QLabel(f"✔ {question}: Correct!")
+                result_label.setStyleSheet("font-size: 18px; color: green;")
+            else:
+                result_label = QLabel(f"✘ {question}: Incorrect! La bonne réponse est: {correct_answer}")
+                result_label.setStyleSheet("font-size: 18px; color: red;")
+
             layout.addWidget(result_label)
 
         btn_back = QPushButton("Retour à l'accueil")
@@ -435,7 +443,7 @@ class LeitnerApp(QMainWindow):
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
-
+    
     def no_more_cards(self):
         """Affiche un message quand il n'y a plus de fiches à réviser."""
         layout = QVBoxLayout()
