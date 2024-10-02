@@ -456,7 +456,6 @@ class LeitnerApp(QMainWindow):
 
 # --------------------------------- Partie 3 Gestion des fiches --------------------------------------
 
-
     def init_view_cards(self):
         """Interface pour afficher toutes les cartes avec une UI améliorée et défilement vertical, avec options de modification."""
         self.clear_layout()
@@ -489,33 +488,45 @@ class LeitnerApp(QMainWindow):
                 card_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #333;")
                 card_layout.addWidget(card_label)
 
+                # Affichage de la catégorie
+                category_label = QLabel(f"Catégorie : {card.get('category', 'Aucune catégorie')}")
+                category_label.setStyleSheet("font-size: 14px; color: #555;")
+                card_layout.addWidget(category_label)
+
                 # Ligne horizontale pour les boutons d'action
                 action_layout = QHBoxLayout()
 
                 # Bouton Supprimer avec icône
                 btn_delete = QPushButton("Supprimer")
-                btn_delete.setIcon(QIcon("icons/trash.png"))  # Assurez-vous d'avoir une icône appropriée
+                btn_delete.setIcon(QIcon("icons/trash.png"))
                 btn_delete.setStyleSheet("color: white; background-color: #e74c3c; border-radius: 4px; padding: 5px;")
                 btn_delete.clicked.connect(partial(self.delete_card, card['question']))
                 action_layout.addWidget(btn_delete)
 
                 # Bouton Modifier Question
                 btn_edit_question = QPushButton("Modifier Question")
-                btn_edit_question.setIcon(QIcon("icons/edit.png"))  # Assurez-vous d'avoir une icône appropriée
+                btn_edit_question.setIcon(QIcon("icons/edit.png"))
                 btn_edit_question.setStyleSheet("color: white; background-color: #f39c12; border-radius: 4px; padding: 5px;")
                 btn_edit_question.clicked.connect(partial(self.edit_card_field, card['question'], 'question'))
                 action_layout.addWidget(btn_edit_question)
 
                 # Bouton Modifier Réponse
                 btn_edit_answer = QPushButton("Modifier Réponse")
-                btn_edit_answer.setIcon(QIcon("icons/edit.png"))  # Assurez-vous d'avoir une icône appropriée
+                btn_edit_answer.setIcon(QIcon("icons/edit.png"))
                 btn_edit_answer.setStyleSheet("color: white; background-color: #f39c12; border-radius: 4px; padding: 5px;")
                 btn_edit_answer.clicked.connect(partial(self.edit_card_field, card['question'], 'answer'))
                 action_layout.addWidget(btn_edit_answer)
 
+                # Bouton Modifier Catégorie
+                btn_edit_category = QPushButton("Modifier Catégorie")
+                btn_edit_category.setIcon(QIcon("icons/edit.png"))
+                btn_edit_category.setStyleSheet("color: white; background-color: #16a085; border-radius: 4px; padding: 5px;")
+                btn_edit_category.clicked.connect(partial(self.edit_card_category, card['question']))
+                action_layout.addWidget(btn_edit_category)
+
                 # Bouton Déplacer avec menu déroulant pour sélectionner la boîte
                 btn_move = QPushButton("Déplacer")
-                btn_move.setIcon(QIcon("icons/move.png"))  # Assurez-vous d'avoir une icône appropriée
+                btn_move.setIcon(QIcon("icons/move.png"))
                 btn_move.setStyleSheet("color: white; background-color: #3498db; border-radius: 4px; padding: 5px;")
                 combo_box = QComboBox()
                 combo_box.addItems([f"Boîte {i + 1}" for i in range(5)])
@@ -576,6 +587,32 @@ class LeitnerApp(QMainWindow):
                 QMessageBox.information(self, "Modifié", f"La {field} a été mise à jour.")
             else:
                 QMessageBox.warning(self, "Erreur", f"Le champ {field} ne peut pas être vide.")
+        
+        self.init_view_cards()
+
+    def edit_card_category(self, question):
+        """Permet de modifier la catégorie associée à une carte."""
+        card = self.leitner_service.get_card_by_question(question)
+        
+        if not card:
+            QMessageBox.warning(self, "Erreur", "Carte introuvable.")
+            return
+
+        # Boîte de dialogue pour l'édition de la catégorie
+        dialog = QInputDialog(self)
+        dialog.setWindowTitle("Modifier Catégorie")
+        dialog.setLabelText("Nouvelle catégorie :")
+        dialog.setTextValue(card.get('category', ""))
+
+        if dialog.exec_() == QDialog.Accepted:
+            new_category = dialog.textValue()
+
+            if new_category:
+                card['category'] = new_category
+                self.leitner_service.update_card(card)
+                QMessageBox.information(self, "Modifié", f"La catégorie a été mise à jour.")
+            else:
+                QMessageBox.warning(self, "Erreur", "La catégorie ne peut pas être vide.")
         
         self.init_view_cards()
 
