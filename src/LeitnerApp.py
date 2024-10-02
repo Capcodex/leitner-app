@@ -1,7 +1,7 @@
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QVBoxLayout, QWidget, QLineEdit, QTextEdit, QComboBox, QMessageBox, QFrame, QHBoxLayout, QScrollArea
 from PySide6.QtGui import QIcon, QPixmap, QFont
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, QEvent
 from LeitnerService import LeitnerService
 from functools import partial
 from datetime import datetime, timedelta
@@ -39,7 +39,7 @@ class LeitnerApp(QMainWindow):
         btn_revision.clicked.connect(self.init_revision_boxes)
         btn_revision.setStyleSheet("background-color: #5c85d6; color: white; padding: 10px; font-size: 18px; border-radius: 5px;")
 
-        btn_view_cards = QPushButton("Voir toutes les cartes")
+        btn_view_cards = QPushButton("Voir toutes les fiches")
         btn_view_cards.clicked.connect(self.init_view_cards)
         btn_view_cards.setStyleSheet("background-color: #5c85d6; color: white; padding: 10px; font-size: 18px; border-radius: 5px;")
 
@@ -181,22 +181,31 @@ class LeitnerApp(QMainWindow):
 
         layout = QVBoxLayout()
 
+        # Champ de question
         self.question_input = QLineEdit()
         self.question_input.setPlaceholderText("Posez une question")
         self.question_input.setStyleSheet("font-size: 16px; padding: 8px;")
+        self.question_input.returnPressed.connect(self.submit_question)  # Appuyer sur Entrée soumet la question
 
+        # Champ de commande (QTextEdit)
         self.command_input = QTextEdit()
         self.command_input.setPlaceholderText("Tapez la commande correspondante")
         self.command_input.setStyleSheet("font-size: 16px; padding: 8px;")
+        
+        # Installer un filtre d'événements pour intercepter la touche Enter
+        self.command_input.installEventFilter(self)
 
+        # Bouton d'enregistrement
         btn_submit = QPushButton("Enregistrer")
         btn_submit.clicked.connect(self.submit_question)
         btn_submit.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; font-size: 16px; border-radius: 5px;")
 
+        # Bouton de retour
         btn_back = QPushButton("Retour")
         btn_back.clicked.connect(self.init_home)
         btn_back.setStyleSheet("background-color: #d9534f; color: white; padding: 10px; font-size: 16px; border-radius: 5px;")
 
+        # Ajout des widgets au layout
         layout.addWidget(self.question_input)
         layout.addWidget(self.command_input)
         layout.addWidget(btn_submit)
@@ -205,6 +214,15 @@ class LeitnerApp(QMainWindow):
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
+
+    # Gestion de l'événement Enter pour QTextEdit
+    def eventFilter(self, obj, event):
+        """Capture l'événement Enter pour QTextEdit et déclenche submit_question sans retour à la ligne."""
+        if obj == self.command_input and event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                self.submit_question()  # Appeler la fonction pour soumettre la question
+                return True  # Empêcher le retour à la ligne
+        return super().eventFilter(obj, event)
 
     def submit_question(self):
         """Soumettre une nouvelle fiche et l'enregistrer dans la boîte 1."""
