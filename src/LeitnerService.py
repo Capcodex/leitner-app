@@ -59,3 +59,10 @@ class LeitnerService:
                 self.cards = json.load(file)
         except (FileNotFoundError, json.JSONDecodeError):
             self.cards = []  # Si le fichier n'existe pas ou est corrompu, on initialise avec une liste vide
+
+    def get_card_by_question(self, question):
+        """Récupère une carte spécifique par sa question."""
+        for card in self.cards:
+            if card['question'] == question:
+                return card
+        return None

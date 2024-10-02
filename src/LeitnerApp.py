@@ -1,5 +1,7 @@
 import sys
-from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QVBoxLayout, QWidget, QLineEdit, QTextEdit, QComboBox, QMessageBox, QFrame, QHBoxLayout, QScrollArea
+from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QLabel, QVBoxLayout,
+                            QWidget, QLineEdit, QTextEdit, QComboBox, QMessageBox, QFrame, 
+                            QHBoxLayout, QScrollArea, QInputDialog, QDialog)
 from PySide6.QtGui import QIcon, QPixmap, QFont
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, QEvent
 from LeitnerService import LeitnerService
@@ -376,15 +378,16 @@ class LeitnerApp(QMainWindow):
 
 
 # --------------------------------- Partie 3 Gestion des fiches --------------------------------------
+
+
     def init_view_cards(self):
-        """Interface pour afficher toutes les cartes avec une UI améliorée et défilement vertical."""
+        """Interface pour afficher toutes les cartes avec une UI améliorée et défilement vertical, avec options de modification."""
         self.clear_layout()
-        
-        
+
         # Création d'un conteneur pour le défilement
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        
+
         # Conteneur pour le contenu à faire défiler
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
@@ -419,6 +422,20 @@ class LeitnerApp(QMainWindow):
                 btn_delete.clicked.connect(partial(self.delete_card, card['question']))
                 action_layout.addWidget(btn_delete)
 
+                # Bouton Modifier Question
+                btn_edit_question = QPushButton("Modifier Question")
+                btn_edit_question.setIcon(QIcon("icons/edit.png"))  # Assurez-vous d'avoir une icône appropriée
+                btn_edit_question.setStyleSheet("color: white; background-color: #f39c12; border-radius: 4px; padding: 5px;")
+                btn_edit_question.clicked.connect(partial(self.edit_card_field, card['question'], 'question'))
+                action_layout.addWidget(btn_edit_question)
+
+                # Bouton Modifier Réponse
+                btn_edit_answer = QPushButton("Modifier Réponse")
+                btn_edit_answer.setIcon(QIcon("icons/edit.png"))  # Assurez-vous d'avoir une icône appropriée
+                btn_edit_answer.setStyleSheet("color: white; background-color: #f39c12; border-radius: 4px; padding: 5px;")
+                btn_edit_answer.clicked.connect(partial(self.edit_card_field, card['question'], 'answer'))
+                action_layout.addWidget(btn_edit_answer)
+
                 # Bouton Déplacer avec menu déroulant pour sélectionner la boîte
                 btn_move = QPushButton("Déplacer")
                 btn_move.setIcon(QIcon("icons/move.png"))  # Assurez-vous d'avoir une icône appropriée
@@ -433,7 +450,7 @@ class LeitnerApp(QMainWindow):
                 # Ajouter le layout d'action à la carte
                 card_layout.addLayout(action_layout)
                 card_frame.setLayout(card_layout)
-                
+
                 # Ajouter le cadre de la carte au layout principal
                 scroll_layout.addWidget(card_frame)
 
@@ -453,16 +470,39 @@ class LeitnerApp(QMainWindow):
         container.setLayout(main_layout)
         self.setCentralWidget(container)
 
-        # Bouton de retour
-        btn_back = QPushButton("Retour")
-        btn_back.setStyleSheet("background-color: #2ecc71; color: white; border-radius: 4px; padding: 10px;")
-        btn_back.clicked.connect(self.init_home)
-        self.layout.addWidget(btn_back)
 
-        # Mise en place du layout principal
-        container = QWidget()
-        container.setLayout(layout)
-        self.setCentralWidget(container)
+    def edit_card_field(self, question, field):
+        """Ouvre une boîte de dialogue pour modifier le champ spécifié (question ou réponse) d'une carte."""
+        card = self.leitner_service.get_card_by_question(question)
+        
+        if not card:
+            QMessageBox.warning(self, "Erreur", "Carte introuvable.")
+            return
+
+        # Boîte de dialogue pour l'édition
+        dialog = QInputDialog(self)
+        dialog.setWindowTitle(f"Modifier {field.capitalize()}")
+
+        if field == 'question':
+            dialog.setLabelText("Nouvelle question :")
+            dialog.setTextValue(card['question'])
+        elif field == 'answer':
+            dialog.setLabelText("Nouvelle réponse :")
+            dialog.setTextValue(card.get('answer', ""))  # Assurez-vous que la clé 'answer' existe
+
+        if dialog.exec_() == QDialog.Accepted:
+            new_value = dialog.textValue()
+            
+            if new_value:
+                card[field] = new_value
+                self.leitner_service.update_card(card)
+                QMessageBox.information(self, "Modifié", f"La {field} a été mise à jour.")
+            else:
+                QMessageBox.warning(self, "Erreur", f"Le champ {field} ne peut pas être vide.")
+        
+        self.init_view_cards()
+
+
         
     def delete_card(self, question):
         """Supprime une carte."""
