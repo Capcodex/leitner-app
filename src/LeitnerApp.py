@@ -44,9 +44,9 @@ class LeitnerApp(QMainWindow):
         btn_add_card.clicked.connect(self.init_add_card)
         btn_add_card.setStyleSheet("background-color: #5c85d6; color: white; padding: 10px; font-size: 18px; border-radius: 5px;")
 
-        btn_revision = QPushButton("Révisions")
-        btn_revision.clicked.connect(self.init_revision_boxes)
-        btn_revision.setStyleSheet("background-color: #5c85d6; color: white; padding: 10px; font-size: 18px; border-radius: 5px;")
+        btn_revision = QPushButton("Commencer la révision")
+        btn_revision.clicked.connect(self.init_category_selection)  # Appelle d'abord la sélection de catégorie
+        btn_revision.setStyleSheet("background-color: #5c85d6; color: white; padding: 10px; font-size: 16px; border-radius: 5px;")
 
         btn_view_cards = QPushButton("Voir toutes les fiches")
         btn_view_cards.clicked.connect(self.init_view_cards)
@@ -61,6 +61,7 @@ class LeitnerApp(QMainWindow):
         self.setCentralWidget(container)
 
 # ------------------------------- Partie 1 : Ajouter une nouvelle fiche -------------------------------------
+
     def init_add_card(self):
         """Interface pour ajouter une nouvelle fiche."""
         self.clear_layout()
@@ -81,6 +82,24 @@ class LeitnerApp(QMainWindow):
         # Installer un filtre d'événements pour intercepter la touche Enter
         self.command_input.installEventFilter(self)
 
+        # Menu déroulant pour sélectionner une catégorie existante ou ajouter une nouvelle
+        self.category_input = QComboBox()
+        self.category_input.setEditable(True)  # Permet d'ajouter une nouvelle catégorie
+        self.category_input.setStyleSheet("font-size: 16px; padding: 8px;")
+
+        # Ajouter un élément "placeholder" en tant qu'invite
+        self.category_input.addItem("Sélectionnez ou ajoutez une catégorie")
+        self.category_input.setItemData(0, 0, Qt.UserRole - 1)  # Empêche la sélection de l'élément 0
+        self.category_input.setStyleSheet("color: gray;")  # Le placeholder apparaît en gris
+        
+        # Charger les catégories existantes
+        categories = self.leitner_service.get_all_categories()
+        if categories:
+            self.category_input.addItems(categories)
+
+        # Détecter si l'utilisateur sélectionne une catégorie
+        self.category_input.currentIndexChanged.connect(self.on_category_selected)
+
         # Bouton d'enregistrement
         btn_submit = QPushButton("Enregistrer")
         btn_submit.clicked.connect(self.submit_question)
@@ -94,12 +113,23 @@ class LeitnerApp(QMainWindow):
         # Ajout des widgets au layout
         layout.addWidget(self.question_input)
         layout.addWidget(self.command_input)
+        layout.addWidget(self.category_input)  # Ajouter le menu déroulant des catégories
         layout.addWidget(btn_submit)
         layout.addWidget(btn_back)
 
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
+
+    def on_category_selected(self, index):
+        """Modifier le style quand une catégorie est sélectionnée."""
+        if index == 0:
+            # Si le placeholder est sélectionné, rester en gris
+            self.category_input.setStyleSheet("color: gray;")
+        else:
+            # Si une vraie catégorie est sélectionnée
+            self.category_input.setStyleSheet("color: black;")
+
 
     # Gestion de l'événement Enter pour QTextEdit
     def eventFilter(self, obj, event):
@@ -114,48 +144,89 @@ class LeitnerApp(QMainWindow):
         """Soumettre une nouvelle fiche et l'enregistrer dans la boîte 1."""
         question = self.question_input.text()
         command = self.command_input.toPlainText()
+        category = self.category_input.currentText()  # Récupérer la catégorie sélectionnée
         if question and command:
             card = {
                 'question': question,
                 'command': command,
-                'box': 0  # Par défaut, toutes les nouvelles cartes commencent dans la boîte 1 (index 0)
+                'box': 0,  # Par défaut, toutes les nouvelles cartes commencent dans la boîte 1 (index 0)
+                'category': category  # Enregistrer la catégorie
             }
             self.leitner_service.add_card(card)
             QMessageBox.information(self, "Enregistré", f"La carte '{question}' a été ajoutée.")
             self.init_home()
 
+
 # --------------------------------- Partie 2 : Révision des fiches ------------------------------------
-    def init_revision_boxes(self):
-        """Interface pour choisir une boîte de révision avec un décompte."""
+
+    def init_category_selection(self):
+        """Interface pour sélectionner une catégorie avant de commencer la révision."""
         self.clear_layout()
 
         layout = QVBoxLayout()
 
+        # Menu déroulant pour sélectionner une catégorie (self.category_input pour la rendre accessible)
+        self.category_input = QComboBox()  # Utilise self ici
+        self.category_input.setStyleSheet("font-size: 16px; padding: 8px;")
+        self.category_input.setEditable(True)
+
+        # Ajouter un placeholder
+        self.category_input.addItem("Sélectionnez une catégorie")
+        self.category_input.setItemData(0, 0, Qt.UserRole - 1)  # Empêche la sélection de l'élément 0
+
+        # Charger les catégories existantes
+        categories = self.leitner_service.get_all_categories()
+        if categories:
+            self.category_input.addItems(categories)
+
+        # Bouton pour valider la sélection de catégorie
+        btn_select_category = QPushButton("Choisir cette catégorie")
+        btn_select_category.clicked.connect(self.init_revision_boxes)  # Passe à la sélection des boîtes
+        btn_select_category.setStyleSheet("background-color: #5c85d6; color: white; padding: 10px; font-size: 16px; border-radius: 5px;")
+
+        layout.addWidget(self.category_input)  # Ajoute le QComboBox au layout
+        layout.addWidget(btn_select_category)
+
+        btn_back = QPushButton("Retour")
+        btn_back.clicked.connect(self.init_home)
+        btn_back.setStyleSheet("background-color: #d9534f; color: white; padding: 10px; font-size: 16px; border-radius: 5px;")
+        layout.addWidget(btn_back)
+
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
+
+
+    def init_revision_boxes(self):
+        """Interface pour choisir une boîte de révision avec un décompte."""
+        # Sauvegarder la catégorie sélectionnée avant d'effacer le layout
+        selected_category = self.category_input.currentText()
+
+        # Maintenant, tu peux effacer le layout en toute sécurité
+        self.clear_layout()
+
+        layout = QVBoxLayout()
+
+        # Filtrer les fiches par boîte et par catégorie
         for i in range(5):  # Pour chaque boîte de 1 à 5
-            cards_in_box = self.leitner_service.get_cards_by_box(i)
+            cards_in_box = self.leitner_service.get_cards_by_box_and_category(i, selected_category)
 
             if not cards_in_box:
                 revision_status = "Pas de cartes à réviser"
                 due = False  # Aucune révision due
                 next_revision = None  # Pas de prochaine révision
             else:
-                # Initialiser 'last_revision' pour les cartes qui ne l'ont pas encore
                 for card in cards_in_box:
                     if 'last_revision' not in card:
                         card['last_revision'] = datetime.now().isoformat()  # Initialiser à la date actuelle
 
-                # Trouver la date de révision la plus ancienne
-                last_revision = min([card['last_revision'] for card in cards_in_box])  
+                last_revision = min([card['last_revision'] for card in cards_in_box])
                 due, next_revision = self.is_revision_due(last_revision, i)
 
-                if due:
-                    revision_status = "Révision à faire"
-                else:
-                    time_left = next_revision - datetime.now()
-                    revision_status = f"Prochaine révision dans {self.format_time_left(time_left)}"
+                revision_status = "Révision à faire" if due else f"Prochaine révision dans {self.format_time_left(next_revision - datetime.now())}"
 
             btn_box = QPushButton(f"Boîte {i + 1} - {revision_status}")
-            btn_box.clicked.connect(partial(self.start_revision, i))
+            btn_box.clicked.connect(partial(self.start_revision, i, selected_category))
             btn_box.setStyleSheet("background-color: #5c85d6; color: white; padding: 10px; font-size: 18px; border-radius: 5px;")
             layout.addWidget(btn_box)
 
@@ -169,11 +240,13 @@ class LeitnerApp(QMainWindow):
         self.setCentralWidget(container)
 
 
-    def start_revision(self, selected_box):
-        """Commence la révision des fiches dans la boîte sélectionnée."""
+
+    def start_revision(self, selected_box, selected_category):
+        """Commence la révision des fiches dans la boîte et la catégorie sélectionnées."""
         self.clear_layout()
 
-        self.questions = self.leitner_service.get_cards_by_box(selected_box)
+        # Filtrer les fiches par boîte et catégorie
+        self.questions = self.leitner_service.get_cards_by_box_and_category(selected_box, selected_category)
         self.results = []  # Réinitialise les résultats
         self.current_index = 0  # Réinitialise l'index des cartes
         self.selected_box = selected_box  # Stocker la boîte actuelle pour la révision
@@ -182,6 +255,11 @@ class LeitnerApp(QMainWindow):
             self.show_current_question()
         else:
             self.no_more_cards()
+
+
+    def get_cards_by_box_and_category(self, box, category):
+        """Renvoie les cartes filtrées par boîte et catégorie."""
+        return [card for card in self.cards if card['box'] == box and card['category'] == category]
 
     def complete_revision(self):
         """Appelée lorsque la révision de la boîte est terminée."""

@@ -4,8 +4,11 @@ from datetime import datetime
 class LeitnerService:
     def __init__(self):
         self.cards = []
+        self.categories = []
         self.file_path = "leitner_cards.json"  # Fichier pour stocker les cartes
+        self.category_file_path = "categories.json"
         self.load_cards()  # Charger les cartes lors de l'initialisation
+        self.load_categories() 
 
     def add_card(self, card):
         # Ajouter une date de révision initiale lors de l'ajout de la carte
@@ -23,6 +26,29 @@ class LeitnerService:
                 card['last_revision'] = datetime.now().isoformat()
 
         return cards_in_box
+
+    def get_all_categories(self):
+        """Retourne toutes les catégories."""
+        return self.categories
+
+    def add_category(self, category):
+        """Ajoute une nouvelle catégorie si elle n'existe pas déjà."""
+        if category not in self.categories:
+            self.categories.append(category)
+            self.save_categories()
+    
+    def save_categories(self):
+        """Sauvegarde les catégories dans un fichier JSON."""
+        with open(self.category_file_path, "w") as file:
+            json.dump(self.categories, file)
+
+    def load_categories(self):
+        """Charge les catégories depuis un fichier JSON."""
+        try:
+            with open(self.category_file_path, "r") as file:
+                self.categories = json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError):
+            self.categories = [] 
 
     def update_card(self, updated_card):
         """Met à jour une carte dans la liste."""
@@ -66,3 +92,9 @@ class LeitnerService:
             if card['question'] == question:
                 return card
         return None
+
+    def get_cards_by_box_and_category(self, box, category):
+        """
+        Récupère les cartes qui sont dans la boîte spécifiée et correspondent à la catégorie donnée.
+        """
+        return [card for card in self.cards if card.get('box') == box and card.get('category') == category]
