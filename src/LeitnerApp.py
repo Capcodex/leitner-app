@@ -78,27 +78,13 @@ class LeitnerApp(QMainWindow):
         self.command_input = QTextEdit()
         self.command_input.setPlaceholderText("Tapez la commande correspondante")
         self.command_input.setStyleSheet("font-size: 16px; padding: 8px;")
-        
-        # Installer un filtre d'événements pour intercepter la touche Enter
-        self.command_input.installEventFilter(self)
 
-        # Menu déroulant pour sélectionner une catégorie existante ou ajouter une nouvelle
+        # Champ de catégorie (QComboBox) avec placeholder
         self.category_input = QComboBox()
-        self.category_input.setEditable(True)  # Permet d'ajouter une nouvelle catégorie
-        self.category_input.setStyleSheet("font-size: 16px; padding: 8px;")
-
-        # Ajouter un élément "placeholder" en tant qu'invite
         self.category_input.addItem("Sélectionnez ou ajoutez une catégorie")
-        self.category_input.setItemData(0, 0, Qt.UserRole - 1)  # Empêche la sélection de l'élément 0
-        self.category_input.setStyleSheet("color: gray;")  # Le placeholder apparaît en gris
-        
-        # Charger les catégories existantes
-        categories = self.leitner_service.get_all_categories()
-        if categories:
-            self.category_input.addItems(categories)
-
-        # Détecter si l'utilisateur sélectionne une catégorie
-        self.category_input.currentIndexChanged.connect(self.on_category_selected)
+        self.category_input.addItems(self.leitner_service.categories)  # Charger les catégories existantes
+        self.category_input.setEditable(True)  # Permettre à l'utilisateur d'ajouter une nouvelle catégorie
+        self.category_input.setStyleSheet("font-size: 16px; padding: 8px;")
 
         # Bouton d'enregistrement
         btn_submit = QPushButton("Enregistrer")
@@ -113,13 +99,15 @@ class LeitnerApp(QMainWindow):
         # Ajout des widgets au layout
         layout.addWidget(self.question_input)
         layout.addWidget(self.command_input)
-        layout.addWidget(self.category_input)  # Ajouter le menu déroulant des catégories
+        layout.addWidget(self.category_input)
         layout.addWidget(btn_submit)
         layout.addWidget(btn_back)
 
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
+
+
 
     def on_category_selected(self, index):
         """Modifier le style quand une catégorie est sélectionnée."""
@@ -131,21 +119,20 @@ class LeitnerApp(QMainWindow):
             self.category_input.setStyleSheet("color: black;")
 
 
-    # Gestion de l'événement Enter pour QTextEdit
-    def eventFilter(self, obj, event):
-        """Capture l'événement Enter pour QTextEdit et déclenche submit_question sans retour à la ligne."""
-        if obj == self.command_input and event.type() == QEvent.KeyPress:
-            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
-                self.submit_question()  # Appeler la fonction pour soumettre la question
-                return True  # Empêcher le retour à la ligne
-        return super().eventFilter(obj, event)
+
 
     def submit_question(self):
         """Soumettre une nouvelle fiche et l'enregistrer dans la boîte 1."""
         question = self.question_input.text()
         command = self.command_input.toPlainText()
         category = self.category_input.currentText()  # Récupérer la catégorie sélectionnée
+        
         if question and command:
+            # Enregistrer la catégorie si elle n'existe pas
+            if category and category not in self.leitner_service.categories:
+                self.leitner_service.add_category(category)
+
+            # Enregistrer la carte
             card = {
                 'question': question,
                 'command': command,
@@ -314,7 +301,7 @@ class LeitnerApp(QMainWindow):
 
         
     def show_current_question(self):
-        """Affiche la fiche en cours."""
+        """Affiche la fiche en cours avec un raccourci pour soumettre via la touche 'Entrée'."""
         layout = QVBoxLayout()
 
         if self.current_index < len(self.questions):
@@ -338,8 +325,11 @@ class LeitnerApp(QMainWindow):
 
             btn_submit = QPushButton("Soumettre")
             btn_submit.setStyleSheet("background-color: #4CAF50; color: white; padding: 8px; font-size: 14px; border-radius: 5px;")
-            btn_submit.clicked.connect(lambda: self.submit_revision(current_card))  # Utiliser une lambda pour passer l'argument
+            btn_submit.clicked.connect(lambda: self.submit_revision(current_card))
             card_layout.addWidget(btn_submit)
+
+            # Connecter la touche 'Entrée' à l'action de soumettre
+            self.command_input.installEventFilter(self)
 
             card_frame.setLayout(card_layout)
             layout.addWidget(card_frame)
@@ -352,6 +342,15 @@ class LeitnerApp(QMainWindow):
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
+
+    def eventFilter(self, source, event):
+        """Intercepte les événements clavier pour activer la soumission avec la touche 'Entrée'."""
+        if source == self.command_input and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+                # Simule le clic sur le bouton "Soumettre"
+                self.submit_revision(self.questions[self.current_index])
+                return True  # Indique que l'événement a été géré
+        return super().eventFilter(source, event)
 
     def submit_revision(self, current_card):
         """Vérifie la réponse et met à jour la carte après révision."""
