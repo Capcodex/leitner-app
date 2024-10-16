@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QVBoxLayout, QPushButton, QWidget, QMessageBox
+from PySide6.QtWidgets import QVBoxLayout, QPushButton, QWidget # type: ignore
 from .add_card_view import AddCardView
 from .review_view import ReviewView
 from .card_management_view import CardManagementView

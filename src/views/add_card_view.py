@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QVBoxLayout, QPushButton, QLineEdit, QTextEdit, QComboBox, QWidget, QMessageBox
+from PySide6.QtWidgets import QVBoxLayout, QPushButton, QLineEdit, QTextEdit, QComboBox, QWidget, QMessageBox # type: ignore
 from src.model import LeitnerService
 
 class AddCardView(QWidget):

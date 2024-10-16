@@ -1,9 +1,9 @@
 import sys
-from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QLabel, QVBoxLayout,
-                            QWidget, QLineEdit, QTextEdit, QComboBox, QMessageBox, QFrame, 
+from PySide6.QtWidgets import ( QPushButton, QLabel, QVBoxLayout, # type: ignore
+                            QWidget, QComboBox, QMessageBox, QFrame, 
                             QHBoxLayout, QScrollArea, QInputDialog, QDialog)
-from PySide6.QtGui import QIcon, QPixmap, QFont
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, QEvent
+from PySide6.QtGui import QIcon # type: ignore
+from PySide6.QtCore import Qt # type: ignore
 from src.model import LeitnerService
 from functools import partial
 from datetime import datetime, timedelta
@@ -23,6 +23,7 @@ class CardManagementView(QWidget):
         # Conteneur pour le contenu à faire défiler
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
+        self.setGeometry(100, 100, 800, 600)
 
         all_cards = self.leitner_service.get_all_cards()
 

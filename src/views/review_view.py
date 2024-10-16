@@ -1,9 +1,8 @@
 import sys
-from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QLabel, QVBoxLayout,
-                            QWidget, QLineEdit, QTextEdit, QComboBox, QMessageBox, QFrame, 
-                            QHBoxLayout, QScrollArea, QInputDialog, QDialog)
-from PySide6.QtGui import QIcon, QPixmap, QFont
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, QEvent
+from PySide6.QtWidgets import ( QPushButton, QLabel, QVBoxLayout, # type: ignore
+                            QWidget, QTextEdit, QComboBox, QFrame)
+from PySide6.QtGui import QFont # type: ignore
+from PySide6.QtCore import Qt, QEvent # type: ignore
 from src.model import LeitnerService
 from functools import partial
 from datetime import datetime, timedelta
@@ -18,6 +17,7 @@ class ReviewView(QWidget):
         """Interface combinée pour sélectionner une catégorie et choisir une boîte de révision."""
 
         layout = QVBoxLayout()
+        self.setGeometry(100, 100, 800, 600)
 
         # Menu déroulant pour sélectionner une catégorie
         self.category_input = QComboBox()
@@ -153,6 +153,7 @@ class StartReviewView(QWidget):
     def init_ui(self):
         """Initialise l'interface utilisateur de base."""
         self.layout = QVBoxLayout()
+        self.setGeometry(100, 100, 800, 600)
 
         # Cadre pour la carte
         self.card_frame = QFrame()
@@ -171,6 +172,12 @@ class StartReviewView(QWidget):
         self.command_input.setPlaceholderText("Tapez la commande correspondant à la réponse")
         self.command_input.setStyleSheet("font-size: 14px; padding: 8px;")
         self.card_layout.addWidget(self.command_input)
+
+        # Label de feedback (pour afficher "correct" ou "incorrect")
+        self.feedback_label = QLabel()
+        self.feedback_label.setFont(QFont("Arial", 14, QFont.Bold))
+        self.card_layout.addWidget(self.feedback_label)
+        self.feedback_label.hide()  # Cacher initialement
 
         # Bouton soumettre
         self.btn_submit = QPushButton("Soumettre")
@@ -196,9 +203,10 @@ class StartReviewView(QWidget):
         current_card = self.questions[self.current_index]
         self.question_label.setText(current_card['question'])  # Mettre à jour la question
         self.command_input.clear()  # Effacer le champ de texte pour la nouvelle réponse
+        self.feedback_label.hide()  # Cacher le feedback pour la prochaine question
 
     def submit_revision(self):
-        """Soumet la réponse et passe à la carte suivante ou affiche les résultats."""
+        """Soumet la réponse, affiche le feedback et attend que l'utilisateur passe à la question suivante."""
         current_card = self.questions[self.current_index]
         user_command = self.command_input.toPlainText().strip()
         correct_answer = current_card['command'].strip()
@@ -208,45 +216,50 @@ class StartReviewView(QWidget):
         # Met à jour la boîte en fonction de la réussite ou de l'échec
         if correct:
             current_card['box'] = min(current_card['box'] + 1, 4)  # Passe à la boîte suivante (max boîte 4)
+            self.feedback_label.setText("✔ Correct!")
+            self.feedback_label.setStyleSheet("color: green;")
         else:
             current_card['box'] = max(current_card['box'] - 1, 0)  # Revient à la boîte précédente
+            self.feedback_label.setText(f"✘ Incorrect! La bonne réponse est: {correct_answer}")
+            self.feedback_label.setStyleSheet("color: red;")
+
+        self.feedback_label.show()  # Afficher le feedback
 
         current_card['last_revision'] = datetime.now().isoformat()  # Met à jour la date de révision
         self.leitner_service.update_card(current_card)  # Enregistre les modifications
 
         # Ajoute la question, la correction et la bonne réponse dans les résultats
         self.results.append((current_card['question'], correct, correct_answer))
+
+        # Change la fonction du bouton pour aller à la question suivante
+        self.btn_submit.setText("Question suivante")
+        self.btn_submit.clicked.disconnect()  # Déconnecte le signal précédent
+        self.btn_submit.clicked.connect(self.next_question)
+
+    def next_question(self):
+        """Passe à la question suivante après avoir affiché le feedback."""
         self.current_index += 1  # Passe à la carte suivante
 
-        # Affiche la question suivante ou les résultats
+        # Si on a encore des questions, afficher la suivante
         if self.current_index < len(self.questions):
             self.show_current_question()
+            self.btn_submit.setText("Soumettre")
+            self.btn_submit.clicked.disconnect()
+            self.btn_submit.clicked.connect(self.submit_revision)  # Reconnecte le signal pour la soumission
         else:
             self.show_results()
 
     def eventFilter(self, source, event):
-        """Intercepte les événements clavier pour activer la soumission avec la touche 'Entrée'."""
+        """Intercepte les événements clavier pour activer la soumission avec Ctrl + Entrée."""
         if source == self.command_input and event.type() == QEvent.KeyPress:
-            if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
-                # Simule le clic sur le bouton "Soumettre"
-                self.submit_revision()
+            if (event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter) and event.modifiers() == Qt.ControlModifier:
+                # Simule le clic sur le bouton "Soumettre" ou "Question suivante"
+                if self.btn_submit.text() == "Soumettre":
+                    self.submit_revision()
+                else:
+                    self.next_question()
                 return True  # Indique que l'événement a été géré
         return super().eventFilter(source, event)
-
-    def format_time_left(self, time_left):
-        """Formate le temps restant pour l'affichage, en ajoutant des jours si nécessaire."""
-        total_seconds = int(time_left.total_seconds())
-        hours, remainder = divmod(total_seconds, 3600)
-        minutes, _ = divmod(remainder, 60)
-
-        # Si les heures dépassent 24, on calcule le nombre de jours et d'heures restantes
-        if hours >= 24:
-            days, hours = divmod(hours, 24)
-            return f"{days}j {hours}h {minutes}m"
-        elif hours > 0:
-            return f"{hours}h {minutes}m"
-        else:
-            return f"{minutes}m"
 
     def no_more_cards(self):
         """Affiche un message quand il n'y a plus de fiches à réviser."""
@@ -291,3 +304,4 @@ class StartReviewView(QWidget):
             child = self.layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
+

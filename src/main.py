@@ -1,5 +1,5 @@
 import sys
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication # type: ignore
 from .model import LeitnerService
 from .views.home_view import HomeView
 
