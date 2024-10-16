@@ -42,7 +42,8 @@ class LeitnerService:
         self.save_cards()  # Sauvegarde après l'ajout
 
     def get_all_categories(self):
-        return self.categories
+        """Retourne une liste de toutes les catégories."""
+        return list(set(card['category'] for card in self.cards if 'category' in card))
     
     def get_cards_by_box_and_category(self, box, category):
         """

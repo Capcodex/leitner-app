@@ -1,38 +1,71 @@
-import sys
-from PySide6.QtWidgets import ( QPushButton, QLabel, QVBoxLayout, # type: ignore
-                            QWidget, QComboBox, QMessageBox, QFrame, 
-                            QHBoxLayout, QScrollArea, QInputDialog, QDialog)
-from PySide6.QtGui import QIcon # type: ignore
-from PySide6.QtCore import Qt # type: ignore
+from PySide6.QtWidgets import (QPushButton, QLabel, QVBoxLayout, QWidget, 
+                               QComboBox, QMessageBox, QFrame, QHBoxLayout, 
+                               QScrollArea, QInputDialog, QDialog, QLineEdit)
+from PySide6.QtGui import QIcon
+from PySide6.QtCore import Qt
 from src.model import LeitnerService
 from functools import partial
-from datetime import datetime, timedelta
 
 class CardManagementView(QWidget):
     def __init__(self):
         super().__init__()
-        self.leitner_service = LeitnerService()  
+        self.leitner_service = LeitnerService()
+        self.scroll_layout = None  # Définir l'attribut ici
         self.init_view_cards()
 
     def init_view_cards(self):
-        """Interface pour afficher toutes les cartes avec une UI améliorée et défilement vertical, avec options de modification."""
-        # Création d'un conteneur pour le défilement
+        """Interface pour afficher toutes les cartes avec une UI améliorée et défilement vertical."""
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-
-        # Conteneur pour le contenu à faire défiler
         scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
-        self.setGeometry(100, 100, 800, 600)
+        self.scroll_layout = QVBoxLayout(scroll_content)  # Définir self.scroll_layout ici
+
+        # Champ de recherche
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Rechercher par mot-clé...")
+        self.search_input.textChanged.connect(self.update_card_view)  # Mettre à jour les cartes lors de la recherche
+        self.scroll_layout.addWidget(self.search_input)
+
+        # Filtre par catégorie
+        self.category_combo = QComboBox()
+        self.category_combo.addItem("Toutes les catégories")
+
+        # Ajouter dynamiquement les catégories à partir du modèle
+        categories = self.leitner_service.get_all_categories()
+        for category in categories:
+            self.category_combo.addItem(category)
+
+        self.category_combo.currentIndexChanged.connect(self.update_card_view)
+        self.scroll_layout.addWidget(self.category_combo)
+
+        # Ajoutez un espace de séparation (optionnel) pour l'esthétique
+        self.scroll_layout.addSpacing(10)
+
+        # Initialiser l'affichage des cartes
+        self.display_cards()  # Afficher les cartes lors de l'initialisation
+
+        scroll_area.setWidget(scroll_content)
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(scroll_area)
+        self.setLayout(main_layout)
+
+    def display_cards(self):
+        """Affiche toutes les cartes dans le layout après application des filtres."""
+        # Effacez les anciens widgets
+        for i in reversed(range(self.scroll_layout.count())): 
+            widget = self.scroll_layout.itemAt(i).widget()
+            if widget is not None and widget not in [self.search_input, self.category_combo]:
+                widget.deleteLater()
 
         all_cards = self.leitner_service.get_all_cards()
+        filtered_cards = self.filter_cards(all_cards)
 
-        if not all_cards:
+        if not filtered_cards:
             empty_label = QLabel("Aucune carte n'a été trouvée.")
             empty_label.setAlignment(Qt.AlignCenter)
-            scroll_layout.addWidget(empty_label)
+            self.scroll_layout.addWidget(empty_label)
         else:
-            for card in all_cards:
+            for card in filtered_cards:
                 # Créer un conteneur pour chaque carte
                 card_frame = QFrame()
                 card_frame.setFrameShape(QFrame.StyledPanel)
@@ -97,27 +130,29 @@ class CardManagementView(QWidget):
                 card_frame.setLayout(card_layout)
 
                 # Ajouter le cadre de la carte au layout principal
-                scroll_layout.addWidget(card_frame)
+                self.scroll_layout.addWidget(card_frame)
 
-        # Configurer le widget de défilement
-        scroll_area.setWidget(scroll_content)
+    def filter_cards(self, cards):
+        """Filtre les cartes selon le mot-clé et la catégorie."""
+        keyword = self.search_input.text().lower()
+        category = self.category_combo.currentText()
 
-        # Bouton de retour
+        filtered_cards = []
+        for card in cards:
+            if (keyword in card['question'].lower() or keyword in card.get('command', '').lower()) and \
+               (category == "Toutes les catégories" or card.get('category', '') == category):
+                filtered_cards.append(card)
 
-        btn_back = QPushButton("Retour")
-        btn_back.clicked.connect(self.close)
-        scroll_layout.addWidget(btn_back)
+        return filtered_cards
 
-        # Mise en place du layout principal
-        main_layout = QVBoxLayout()
-        main_layout.addWidget(scroll_area)  # Ajoutez la zone de défilement au layout principal
-        self.setLayout(main_layout)
-
+    def update_card_view(self):
+        """Met à jour l'affichage des cartes selon les filtres appliqués."""
+        self.display_cards()  # Appeler display_cards pour afficher les cartes
 
     def edit_card_field(self, question, field):
         """Ouvre une boîte de dialogue pour modifier le champ spécifié (question ou réponse) d'une carte."""
         card = self.leitner_service.get_card_by_question(question)
-        
+
         if not card:
             QMessageBox.warning(self, "Erreur", "Carte introuvable.")
             return
@@ -135,80 +170,56 @@ class CardManagementView(QWidget):
 
         if dialog.exec_() == QDialog.Accepted:
             new_value = dialog.textValue()
-            
+
             if new_value:
                 card[field] = new_value
                 self.leitner_service.update_card(card)
                 QMessageBox.information(self, "Modifié", f"La {field} a été mise à jour.")
             else:
                 QMessageBox.warning(self, "Erreur", f"Le champ {field} ne peut pas être vide.")
-        
-        self.init_view_cards()
 
+            self.update_card_view()
 
     def edit_card_category(self, question):
         """Permet de modifier la catégorie associée à une carte."""
         card = self.leitner_service.get_card_by_question(question)
-        
+
         if not card:
             QMessageBox.warning(self, "Erreur", "Carte introuvable.")
             return
 
-        # Boîte de dialogue pour l'édition de la catégorie
-        dialog = QInputDialog(self)
-        dialog.setWindowTitle("Modifier Catégorie")
-        dialog.setLabelText("Nouvelle catégorie :")
-        dialog.setTextValue(card.get('category', ""))
+        new_category, ok = QInputDialog.getItem(self, "Modifier Catégorie", 
+                                                 "Sélectionnez une nouvelle catégorie :",
+                                                 self.leitner_service.get_all_categories(), editable=True)
 
-        if dialog.exec_() == QDialog.Accepted:
-            new_category = dialog.textValue()
+        if ok and new_category:
+            card['category'] = new_category
+            self.leitner_service.update_card(card)
+            self.update_card_view()
 
-            if new_category:
-                card['category'] = new_category
-                self.leitner_service.update_card(card)
-                QMessageBox.information(self, "Modifié", f"La catégorie a été mise à jour.")
-            else:
-                QMessageBox.warning(self, "Erreur", "La catégorie ne peut pas être vide.")
-        
-        self.init_view_cards()
-
-
-        
     def delete_card(self, question):
-        """Supprime une carte."""
-        self.leitner_service.delete_card(question)
-        QMessageBox.information(self, "Supprimé", f"La carte '{question}' a été supprimée.")
-        self.init_view_cards()
+        """Supprime une carte en fonction de la question."""
+        card = self.leitner_service.get_card_by_question(question)
+        if not card:
+            QMessageBox.warning(self, "Erreur", "Carte introuvable.")
+            return
 
-    def get_next_revision_time(box):
-        """Renvoie la durée jusqu'à la prochaine révision en fonction de la boîte."""
-        now = datetime.now()
-        
-        if box == 0:
-            return now + timedelta(minutes=10)  # Boîte 1: 10 minutes
-        elif box == 1:
-            return now + timedelta(days=1)  # Boîte 2: 1 jour
-        elif box == 2:
-            return now + timedelta(weeks=1)  # Boîte 3: 1 semaine
-        elif box == 3:
-            return now + timedelta(weeks=4)  # Boîte 4: 1 mois (approximatif)
-        elif box == 4:
-            return now + timedelta(weeks=26)  # Boîte 5: 6 mois
-        else:
-            return now
+        confirm = QMessageBox.question(self, "Confirmer", f"Êtes-vous sûr de vouloir supprimer la carte : '{question}' ?",
+                                        QMessageBox.Yes | QMessageBox.No)
 
-
+        if confirm == QMessageBox.Yes:
+            self.leitner_service.delete_card(card['question'])
+            self.update_card_view()
 
     def move_card(self, question, combo_box):
-        """Déplace une carte vers une autre boîte et met à jour la date de révision."""
-        target_box = combo_box.currentIndex()
-        self.leitner_service.move_card(question, target_box)
-        
-        # Ajouter la date de prochaine révision
+        """Déplace une carte vers une nouvelle boîte."""
         card = self.leitner_service.get_card_by_question(question)
-        card['next_revision'] = self.get_next_revision_time(target_box)
+
+        if not card:
+            QMessageBox.warning(self, "Erreur", "Carte introuvable.")
+            return
+
+        box_index = combo_box.currentIndex()  # Récupérer l'index de la boîte sélectionnée
+        card['box'] = box_index
         self.leitner_service.update_card(card)
-
-        QMessageBox.information(self, "Déplacé", f"La carte '{question}' a été déplacée vers la boîte {target_box + 1}.")
-        self.init_view_cards()
-
+        self.update_card_view()
