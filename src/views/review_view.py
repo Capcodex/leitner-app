@@ -24,14 +24,17 @@ class ReviewView(QWidget):
         self.category_input.setStyleSheet("font-size: 16px; padding: 8px;")
         self.category_input.setEditable(True)
 
-        # Ajouter un placeholder
-        self.category_input.addItem("Sélectionnez une catégorie")
+        # Ajouter une option par défaut "All"
+        self.category_input.addItem("All")
         self.category_input.setItemData(0, 0, Qt.UserRole - 1)  # Empêche la sélection de l'élément 0
 
         # Charger les catégories existantes
         categories = self.leitner_service.get_all_categories()
         if categories:
             self.category_input.addItems(categories)
+
+        # Définir "All" comme catégorie sélectionnée par défaut
+        self.category_input.setCurrentIndex(0)
 
         # Connecter la modification de la catégorie pour actualiser les boîtes
         self.category_input.currentIndexChanged.connect(self.update_revision_boxes)
@@ -49,6 +52,9 @@ class ReviewView(QWidget):
         layout.addWidget(btn_back)
 
         self.setLayout(layout)
+
+        # Appeler update_revision_boxes après la configuration initiale
+        self.update_revision_boxes()  # Ajoutez cette ligne pour que les boîtes s'affichent immédiatement
 
     def update_revision_boxes(self):
         """Actualise l'affichage des boîtes de révision en fonction de la catégorie sélectionnée."""
@@ -84,10 +90,6 @@ class ReviewView(QWidget):
         self.start_review_view = StartReviewView(selected_box, selected_category)
         self.start_review_view.show()
 
-
-
-
-
     def is_revision_due(self, last_revision, box):
         """
         Vérifie si une révision est due pour une carte donnée, en fonction de l'intervalle de la boîte.
@@ -116,7 +118,7 @@ class ReviewView(QWidget):
         due = datetime.now() >= next_revision
         
         return due, next_revision
-    
+
     def format_time_left(self, time_left):
         """Formate le temps restant pour l'affichage, en ajoutant des jours si nécessaire."""
         total_seconds = int(time_left.total_seconds())
@@ -131,7 +133,6 @@ class ReviewView(QWidget):
             return f"{hours}h {minutes}m"
         else:
             return f"{minutes}m"
-        
 
 class StartReviewView(QWidget):
     def __init__(self, selected_box, selected_category):
@@ -248,18 +249,20 @@ class StartReviewView(QWidget):
             self.btn_submit.clicked.connect(self.submit_revision)  # Reconnecte le signal pour la soumission
         else:
             self.show_results()
-
+            
     def eventFilter(self, source, event):
-        """Intercepte les événements clavier pour activer la soumission avec Ctrl + Entrée."""
-        if source == self.command_input and event.type() == QEvent.KeyPress:
-            if (event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter) and event.modifiers() == Qt.ControlModifier:
-                # Simule le clic sur le bouton "Soumettre" ou "Question suivante"
-                if self.btn_submit.text() == "Soumettre":
-                    self.submit_revision()
-                else:
-                    self.next_question()
-                return True  # Indique que l'événement a été géré
-        return super().eventFilter(source, event)
+            """Intercepte les événements clavier pour activer la soumission avec Ctrl + Entrée."""
+            if source == self.command_input and event.type() == QEvent.KeyPress:
+                if (event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter) and event.modifiers() == Qt.ControlModifier:
+                    # Simule le clic sur le bouton "Soumettre" ou "Question suivante"
+                    if self.btn_submit.text() == "Soumettre":
+                        self.submit_revision()
+                    else:
+                        self.next_question()
+                    return True  # Indique que l'événement a été géré
+            return super().eventFilter(source, event)
+
+
 
     def no_more_cards(self):
         """Affiche un message quand il n'y a plus de fiches à réviser."""
@@ -283,20 +286,22 @@ class StartReviewView(QWidget):
         else:
             # Affiche chaque résultat
             for question, correct, correct_answer in self.results:
-                # Affichage personnalisé pour les réponses correctes et incorrectes
                 if correct:
                     result_label = QLabel(f"✔ {question}: Correct!")
                     result_label.setStyleSheet("font-size: 18px; color: green;")
                 else:
                     result_label = QLabel(f"✘ {question}: Incorrect! La bonne réponse est: {correct_answer}")
                     result_label.setStyleSheet("font-size: 18px; color: red;")
-
                 self.layout.addWidget(result_label)
 
-        btn_back = QPushButton("Retour à l'accueil")
-        btn_back.clicked.connect(self.close)
-        btn_back.setStyleSheet("background-color: #5c85d6; color: white; padding: 10px; font-size: 16px; border-radius: 5px;")
-        self.layout.addWidget(btn_back)
+        # Crée le bouton de retour à l'accueil
+        self.btn_back = QPushButton("Retour à l'accueil")  # Utiliser self pour l'accès dans eventFilter
+        self.btn_back.clicked.connect(self.close)
+        self.btn_back.setStyleSheet("background-color: #5c85d6; color: white; padding: 10px; font-size: 16px; border-radius: 5px;")
+        self.layout.addWidget(self.btn_back)
+
+        # Active le filtre d'événements pour ce bouton
+        self.btn_back.installEventFilter(self)
 
     def clear_layout(self):
         """Supprime tous les widgets du layout actuel."""

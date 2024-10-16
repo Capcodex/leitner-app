@@ -43,9 +43,18 @@ class LeitnerService:
 
     def get_all_categories(self):
         return self.categories
-
+    
     def get_cards_by_box_and_category(self, box, category):
-        return [card for card in self.cards if card['box'] == box and card['category'] == category]
+        """
+        Récupère les cartes qui sont dans la boîte spécifiée et correspondent à la catégorie donnée.
+        Si la catégorie est 'All', retourne toutes les cartes de la boîte spécifiée, sans filtrer par catégorie.
+        """
+        if category == "All":
+            # Si la catégorie est "All", ne pas filtrer par catégorie
+            return [card for card in self.cards if card.get('box') == box]
+        else:
+            # Filtrer à la fois par boîte et par catégorie
+            return [card for card in self.cards if card.get('box') == box and card.get('category') == category]
 
     def update_card(self, updated_card):
         """Met à jour une carte dans la liste."""
